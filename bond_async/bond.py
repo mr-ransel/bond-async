@@ -60,6 +60,21 @@ class Bond:
             raise ValueError("Brightness must be between 0 and 255")
         await self.__patch("/v2/bridge", {"bluelight": brightness})
 
+    async def led_state(self) -> dict:
+        """Return the LED count, control mode, and current RGB values of the bridge."""
+        return await self.__get("/v2/debug/leds")
+
+    async def set_led_state(self, manual: bool, value: Optional[str] = None) -> None:
+        """Set the LEDs of the bridge.
+
+        When manual is True, automatic LED control is disabled and the LEDs remain fixed as set.
+        When manual is False, automatic LED control is restored.
+        The value is a concatenated 24-bit RGB hex string for each LED, e.g. "ff000000ff00" for red, green."""
+        json = {"manual": 1 if manual else 0}
+        if value is not None:
+            json["value"] = value
+        await self.__patch("/v2/debug/leds", json)
+
     async def devices(self) -> List[str]:
         """Return the list of available device IDs reported by API."""
         json = await self.__get("/v2/devices")
@@ -109,6 +124,38 @@ class Bond:
                     response.raise_for_status()
 
             await self.__call(put)
+
+    async def start_signal_scan(self, freq: Optional[float] = None, modulation: Optional[str] = None) -> None:
+        """Start scanning for an RF/IR signal.
+
+        The freq is in kHz; if not provided, all RF frequencies are scanned, but not IR. Use 38 to scan IR.
+        The modulation defaults to "OOK" on the bridge if not provided."""
+        json = {}
+        if freq is not None:
+            json["freq"] = freq
+        if modulation is not None:
+            json["modulation"] = modulation
+        await self.__put("/v2/signal/scan", json)
+
+    async def signal_scan_progress(self) -> dict:
+        """Return the progress of the scan in progress, or of the last completed scan."""
+        return await self.__get("/v2/signal/scan")
+
+    async def cancel_signal_scan(self) -> None:
+        """Stop scanning immediately and delete the scan results."""
+        await self.__delete("/v2/signal/scan")
+
+    async def signal_scan_result(self) -> dict:
+        """Return the signal found by the most recent scan."""
+        return await self.__get("/v2/signal/scan/signal")
+
+    async def transmit_signal(self, signal: dict) -> None:
+        """Transmit an RF/IR signal, such as one returned by signal_scan_result."""
+        await self.__put("/v2/signal/tx", signal)
+
+    async def cancel_signal_transmission(self) -> None:
+        """Interrupt any signal being transmitted and cancel any queued transmissions."""
+        await self.__delete("/v2/signal/tx")
 
     async def supports_groups(self) -> Boolean:
         """Return 'True' if the Bond supports the Groups feature."""
@@ -199,6 +246,17 @@ class Bond:
                 response.raise_for_status()
 
         await self.__call(put)
+
+    async def __delete(self, path) -> None:
+        async def delete(session: ClientSession) -> None:
+            self._api_kwargs["headers"]["BOND-UUID"] = self.__create_message_id()
+            async with session.delete(
+                f"http://{self._host}{path}",
+                **self._api_kwargs,
+            ) as response:
+                response.raise_for_status()
+
+        await self.__call(delete)
 
     async def __call(self, handler: Callable[[ClientSession], Any]):
         if not self._session:

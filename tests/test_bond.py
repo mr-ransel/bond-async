@@ -521,3 +521,129 @@ async def test_set_bluelight_brightness(bond: Bond):
             callback=callback,
         )
         await bond.set_bluelight_brightness(50)
+
+
+@pytest.mark.asyncio
+async def test_led_state(bond: Bond):
+    """Tests led_state API."""
+    with aioresponses() as response:
+        response.get(
+            "http://test-host/v2/debug/leds",
+            payload={"n": 2, "manual": 0, "value": "ff000000ff00"},
+        )
+        actual = await bond.led_state()
+        assert actual == {"n": 2, "manual": 0, "value": "ff000000ff00"}
+
+
+@pytest.mark.asyncio
+async def test_set_led_state(bond: Bond):
+    """Tests set_led_state delegates to API."""
+    with aioresponses() as response:
+        def callback(_url, **kwargs):
+            assert kwargs.get("json") == {"manual": 1, "value": "ff000000ff00"}
+            return CallbackResult()
+
+        response.patch(
+            "http://test-host/v2/debug/leds",
+            callback=callback,
+        )
+        await bond.set_led_state(True, "ff000000ff00")
+
+
+@pytest.mark.asyncio
+async def test_set_led_state_automatic(bond: Bond):
+    """Tests set_led_state restores automatic LED control."""
+    with aioresponses() as response:
+        def callback(_url, **kwargs):
+            assert kwargs.get("json") == {"manual": 0}
+            return CallbackResult()
+
+        response.patch(
+            "http://test-host/v2/debug/leds",
+            callback=callback,
+        )
+        await bond.set_led_state(False)
+
+
+@pytest.mark.asyncio
+async def test_start_signal_scan(bond: Bond):
+    """Tests start_signal_scan delegates to API."""
+    with aioresponses() as response:
+        def callback(_url, **kwargs):
+            assert kwargs.get("json") == {"freq": 434.3, "modulation": "OOK"}
+            return CallbackResult(status=201)
+
+        response.put(
+            "http://test-host/v2/signal/scan",
+            callback=callback,
+        )
+        await bond.start_signal_scan(434.3, "OOK")
+
+
+@pytest.mark.asyncio
+async def test_start_signal_scan_defaults(bond: Bond):
+    """Tests start_signal_scan without arguments leaves defaults to the bridge."""
+    with aioresponses() as response:
+        def callback(_url, **kwargs):
+            assert kwargs.get("json") == {}
+            return CallbackResult(status=201)
+
+        response.put(
+            "http://test-host/v2/signal/scan",
+            callback=callback,
+        )
+        await bond.start_signal_scan()
+
+
+@pytest.mark.asyncio
+async def test_signal_scan_progress(bond: Bond):
+    """Tests signal_scan_progress API."""
+    with aioresponses() as response:
+        response.get(
+            "http://test-host/v2/signal/scan",
+            payload={"freq": 434.3, "modulation": "OOK", "running": False, "total_timeout": 30, "success": True},
+        )
+        actual = await bond.signal_scan_progress()
+        assert actual == {"freq": 434.3, "modulation": "OOK", "running": False, "total_timeout": 30, "success": True}
+
+
+@pytest.mark.asyncio
+async def test_cancel_signal_scan(bond: Bond):
+    """Tests cancel_signal_scan delegates to API."""
+    with aioresponses() as response:
+        response.delete("http://test-host/v2/signal/scan", status=204)
+        await bond.cancel_signal_scan()
+
+
+@pytest.mark.asyncio
+async def test_signal_scan_result(bond: Bond):
+    """Tests signal_scan_result API."""
+    signal = {"freq": 434.3, "modulation": "OOK", "data": "1010", "encoding": "cq", "bps": 3000, "reps": 10}
+    with aioresponses() as response:
+        response.get("http://test-host/v2/signal/scan/signal", payload=signal)
+        actual = await bond.signal_scan_result()
+        assert actual == signal
+
+
+@pytest.mark.asyncio
+async def test_transmit_signal(bond: Bond):
+    """Tests transmit_signal delegates to API."""
+    signal = {"freq": 434.3, "modulation": "OOK", "data": "1010", "encoding": "cq", "bps": 3000, "reps": 10}
+    with aioresponses() as response:
+        def callback(_url, **kwargs):
+            assert kwargs.get("json") == signal
+            return CallbackResult(status=204)
+
+        response.put(
+            "http://test-host/v2/signal/tx",
+            callback=callback,
+        )
+        await bond.transmit_signal(signal)
+
+
+@pytest.mark.asyncio
+async def test_cancel_signal_transmission(bond: Bond):
+    """Tests cancel_signal_transmission delegates to API."""
+    with aioresponses() as response:
+        response.delete("http://test-host/v2/signal/tx", status=204)
+        await bond.cancel_signal_transmission()
