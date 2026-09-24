@@ -68,7 +68,8 @@ class Bond:
         """Set the LEDs of the bridge.
 
         When manual is True, automatic LED control is disabled and the LEDs remain fixed as set.
-        When manual is False, automatic LED control is restored.
+        When manual is False, automatic LED control is restored; a value set at the same time is applied,
+        but may be overridden at any time by the bridge's automatic LED updates.
         The value is a concatenated 24-bit RGB hex string for each LED, e.g. "ff000000ff00" for red, green."""
         json = {"manual": 1 if manual else 0}
         if value is not None:
